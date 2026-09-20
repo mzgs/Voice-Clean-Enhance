@@ -1,0 +1,19 @@
+[package]
+name = "voice-clean-enhance"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "clean-voice"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+deep_filter = { path = "vendor/deepfilter/libDF", default-features = false, features = ["tract", "default-model"] }
+ndarray = "0.15"
+serde_json = "1"
+tempfile = "3"
+
+[profile.release]
+strip = true
