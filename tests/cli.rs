@@ -19,6 +19,66 @@ fn cli(input: &Path, output: &Path) -> Output {
         .output()
         .unwrap()
 }
+fn cli_dereverb(input: &Path, output: &Path, level: &str) -> Output {
+    Command::new(env!("CARGO_BIN_EXE_clean-voice"))
+        .arg(input)
+        .arg(output)
+        .args(["--dereverb", level])
+        .output()
+        .unwrap()
+}
+
+#[test]
+fn dereverb_stereo_silence_length_and_report() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("silence.wav");
+    ff(&[
+        "-f",
+        "lavfi",
+        "-i",
+        "anullsrc=r=48000:cl=stereo:d=0.12345",
+        "-c:a",
+        "pcm_f32le",
+        input.to_str().unwrap(),
+    ]);
+    let before = ff(&["-i", input.to_str().unwrap(), "-f", "f32le", "-"]).stdout;
+    for level in ["gentle", "balanced", "strong"] {
+        let output = dir.path().join(format!("{level}.wav"));
+        let result = cli_dereverb(&input, &output, level);
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let after = ff(&["-i", output.to_str().unwrap(), "-f", "f32le", "-"]).stdout;
+        assert_eq!(before, after, "Silence/length changed");
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.with_extension("wav.json")).unwrap()).unwrap();
+        assert_eq!(report["dereverb"], level);
+        assert_eq!(report["dereverb_method"], "experimental-online-wpe");
+        let saved = fs::read(&output).unwrap();
+        assert!(!cli_dereverb(&input, &output, level).status.success());
+        assert_eq!(saved, fs::read(output).unwrap());
+    }
+    let output = dir.path().join("invalid.wav");
+    assert!(!cli_dereverb(&input, &output, "invalid").status.success());
+    assert!(!output.exists());
+    let output = dir.path().join("bare.wav");
+    let result = Command::new(env!("CARGO_BIN_EXE_clean-voice"))
+        .arg(&input)
+        .arg(&output)
+        .arg("--dereverb")
+        .output()
+        .unwrap();
+    assert!(
+        result.status.success(),
+        "{}",
+        String::from_utf8_lossy(&result.stderr)
+    );
+    let report: serde_json::Value =
+        serde_json::from_slice(&fs::read(output.with_extension("wav.json")).unwrap()).unwrap();
+    assert_eq!(report["dereverb"], "gentle");
+}
 #[test]
 fn short_audio_tail_silence_and_no_clobber() {
     let dir = tempfile::tempdir().unwrap();
@@ -46,6 +106,10 @@ fn short_audio_tail_silence_and_no_clobber() {
             "{}",
             String::from_utf8_lossy(&result.stderr)
         );
+        let report: serde_json::Value =
+            serde_json::from_slice(&fs::read(output.with_extension("wav.json")).unwrap()).unwrap();
+        assert_eq!(report["dereverb"], "off");
+        assert!(report["dereverb_method"].is_null());
         let before = ff(&["-i", input.to_str().unwrap(), "-f", "f32le", "-"]).stdout;
         let after = ff(&["-i", output.to_str().unwrap(), "-f", "f32le", "-"]).stdout;
         assert_eq!(before.len(), after.len());
@@ -89,7 +153,7 @@ fn direct_video_copies_picture() {
         "aac",
         input.to_str().unwrap(),
     ]);
-    let result = cli(&input, &output);
+    let result = cli_dereverb(&input, &output, "gentle");
     assert!(
         result.status.success(),
         "{}",
@@ -135,7 +199,7 @@ fn remux_preserves_audio_start_offset() {
         "pcm_s16le",
         input.to_str().unwrap(),
     ]);
-    let result = cli(&input, &output);
+    let result = cli_dereverb(&input, &output, "balanced");
     assert!(
         result.status.success(),
         "{}",

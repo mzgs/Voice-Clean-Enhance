@@ -9,6 +9,7 @@ download is required. FFmpeg and ffprobe must be available on PATH.
 ```sh
 ./clean-voice input.mp4 out.mp4
 ./clean-voice input.mp4 out.mp4 --profile balanced
+./clean-voice input.mp4 out.mp4 --dereverb gentle
 ./clean-voice input.mp4 out.wav --start 60 --duration 30
 ```
 
@@ -48,6 +49,31 @@ sample-peak headroom; it does not guarantee AAC true-peak headroom.
 Stereo channels have independent model states. Their spatial image may change.
 This is a speech model: music and other desired sounds may be removed. It cannot
 guarantee isolation of one speaker from other voices or match Final Cut's quality.
+
+### Optional room-reverb reduction
+
+`--dereverb gentle` adds **experimental** room-reverb reduction before neural
+noise cleanup. It is **off by default**. Available levels are `off`, `gentle`,
+`balanced`, and `strong`; bare `--dereverb` selects `gentle`.
+
+```sh
+./clean-voice input.mp4 preview.wav --start 60 --duration 30 --dereverb gentle
+./clean-voice input.mp4 clean.mp4 --profile balanced --dereverb balanced
+```
+
+This uses an online weighted prediction error (WPE) filter to estimate delayed
+room reflections, with conservative subtraction limits. It adapts as audio plays,
+so the first seconds and changes in room acoustics may receive less reduction.
+It aims to reduce late reverberation, not completely remove room sound, isolate
+speakers, or cancel speakerphone echo using a reference track. Strong settings
+can color sustained speech; compare a preview with dereverb off before processing
+a full recording. Listening quality on real recordings has not been established.
+Stereo channels are processed independently and the stereo image may change.
+
+The stage runs in Rust, uses bounded memory, and needs no additional downloads.
+Its extra processing delay is compensated, preserving decoded length and timing.
+The JSON report records the selected `dereverb` level and `dereverb_method`.
+Algorithm background: [NARA-WPE](https://github.com/fgnt/nara_wpe).
 
 ## Implementation
 

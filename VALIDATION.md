@@ -27,3 +27,20 @@ Environment: Apple Silicon macOS, Rust 1.93.1, existing FFmpeg installation.
 - The full 80-minute source has not been processed.
 
 Scratch results are in ignored `work/`. The original files were not modified.
+
+## Optional room dereverberation
+
+- `cargo test --release --locked`: all 7 tests passed (3 DSP, 4 CLI).
+- The default remains off; reports distinguish off from experimental online WPE.
+- DSP reconstruction checks mono/stereo timing through non-frame-aligned lengths,
+  including one sample, and verifies isolated boundary impulses and no crosstalk.
+- A deterministic 10-second broadband-burst signal with two recursive decaying
+  reflection paths exercises adaptation. At balanced strength, measured late-tail
+  energy after warm-up was 0.174 times input tail energy; onset energy was 0.958
+  times input onset energy. This is one synthetic fixture, not a speech quality
+  score or a promise of equivalent reduction on room recordings.
+- Predictor stability is checked across 100,000 frames including prolonged silence
+  and uncorrelated dry input. CLI checks exercise all strengths, stereo silence,
+  exact output length, reports, invalid options, and overwrite protection.
+- Video-copy and delayed-audio remux tests now run with dereverb enabled.
+- Listening-based validation of dereverb on real speech remains outstanding.

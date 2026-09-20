@@ -1,3 +1,5 @@
+mod dereverb;
+
 use anyhow::{ensure, Context, Result};
 use clap::{Parser, ValueEnum};
 use df::tract::{DfParams, DfTract, RuntimeParams};
@@ -17,6 +19,31 @@ enum Profile {
     Balanced,
     Strong,
 }
+#[derive(Clone, Copy, Debug, ValueEnum)]
+enum DereverbProfile {
+    Off,
+    Gentle,
+    Balanced,
+    Strong,
+}
+impl DereverbProfile {
+    fn amount(self) -> f32 {
+        match self {
+            Self::Off => 0.0,
+            Self::Gentle => 0.35,
+            Self::Balanced => 0.6,
+            Self::Strong => 0.85,
+        }
+    }
+    fn name(self) -> &'static str {
+        match self {
+            Self::Off => "off",
+            Self::Gentle => "gentle",
+            Self::Balanced => "balanced",
+            Self::Strong => "strong",
+        }
+    }
+}
 #[derive(Parser, Debug)]
 #[command(
     version,
@@ -28,6 +55,9 @@ struct Args {
     output: PathBuf,
     #[arg(long, value_enum, default_value = "gentle")]
     profile: Profile,
+    /// Experimental room-reverb reduction before noise cleanup (default: off)
+    #[arg(long, value_enum, default_value = "off", default_missing_value = "gentle", num_args = 0..=1)]
+    dereverb: DereverbProfile,
     /// Suppression limit, 1–60 dB; overrides the profile
     #[arg(long)]
     attenuation: Option<f32>,
@@ -185,9 +215,18 @@ fn main() -> Result<()> {
         .arg(&raw);
     eprintln!("Decoding audio…");
     run(&mut decode)?;
+    let clock = Instant::now();
+    let raw = if args.dereverb.amount() > 0.0 {
+        let reduced = temp.path().join("dereverb.f32");
+        eprintln!("Reducing room reverb ({})…", args.dereverb.name());
+        dereverb::process_file(&raw, &reduced, channels, args.dereverb.amount())?;
+        fs::remove_file(&raw)?;
+        reduced
+    } else {
+        raw
+    };
     let frames = fs::metadata(&raw)?.len() as usize / (channels * 4);
     ensure!(frames > 0, "Selected range contains no audio");
-    let clock = Instant::now();
     eprintln!("Loading embedded DeepFilterNet3 model…");
     // Separate recurrent state per channel, matching the Python baseline's independent channels.
     let params = RuntimeParams::default()
@@ -300,7 +339,7 @@ fn main() -> Result<()> {
     run(&mut encode)?;
     fs::hard_link(&staged, &args.output)
         .context("Could not publish output (an existing file is never replaced)")?;
-    let data = json!({"model":"DeepFilterNet3","engine":"DeepFilterNet Rust / Tract","input":args.input,"output":args.output,"attenuation_db":limit,"sample_rate":48000,"channels":channels,"frames":frames,"delay_compensated_samples":delay,"gain_db":20.0*gain.log10(),"elapsed_seconds":clock.elapsed().as_secs_f64(),"python_required":false});
+    let data = json!({"model":"DeepFilterNet3","engine":"DeepFilterNet Rust / Tract","input":args.input,"output":args.output,"attenuation_db":limit,"dereverb":args.dereverb.name(),"dereverb_method":if args.dereverb.amount() > 0.0 { Some("experimental-online-wpe") } else { None },"sample_rate":48000,"channels":channels,"frames":frames,"delay_compensated_samples":delay,"gain_db":20.0*gain.log10(),"elapsed_seconds":clock.elapsed().as_secs_f64(),"python_required":false});
     let mut report_file = File::options().write(true).create_new(true).open(&report)?;
     serde_json::to_writer_pretty(&mut report_file, &data)?;
     eprintln!("Saved {}", args.output.display());
