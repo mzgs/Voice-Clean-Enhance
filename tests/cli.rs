@@ -16,6 +16,7 @@ fn cli(input: &Path, output: &Path) -> Output {
     Command::new(env!("CARGO_BIN_EXE_clean-voice"))
         .arg(input)
         .arg(output)
+        .arg("--report")
         .output()
         .unwrap()
 }
@@ -23,6 +24,7 @@ fn cli_dereverb(input: &Path, output: &Path, level: &str) -> Output {
     Command::new(env!("CARGO_BIN_EXE_clean-voice"))
         .arg(input)
         .arg(output)
+        .arg("--report")
         .args(["--dereverb", level])
         .output()
         .unwrap()
@@ -67,6 +69,7 @@ fn dereverb_stereo_silence_length_and_report() {
     let result = Command::new(env!("CARGO_BIN_EXE_clean-voice"))
         .arg(&input)
         .arg(&output)
+        .arg("--report")
         .arg("--dereverb")
         .output()
         .unwrap();
@@ -230,4 +233,29 @@ fn remux_preserves_audio_start_offset() {
         (start - 0.2).abs() < 0.025,
         "Audio start offset lost: {start}"
     );
+}
+
+#[test]
+fn no_report_exports_only_media_and_ignores_existing_reports() {
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("input.wav");
+    ff(&["-f", "lavfi", "-i", "anullsrc=r=48000:cl=mono:d=0.1", input.to_str().unwrap()]);
+    for existing_report in [false, true] {
+        let output = dir.path().join(format!("clean-{existing_report}.wav"));
+        let report = output.with_extension("wav.json");
+        if existing_report { fs::write(&report, "existing report").unwrap(); }
+        let run = || Command::new(env!("CARGO_BIN_EXE_clean-voice"))
+            .arg(&input).arg(&output).output().unwrap();
+        let result = run();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        assert!(output.is_file());
+        if existing_report {
+            assert_eq!(fs::read_to_string(&report).unwrap(), "existing report");
+        } else {
+            assert!(!report.exists());
+        }
+        let original = fs::read(&output).unwrap();
+        assert!(!run().status.success());
+        assert_eq!(fs::read(&output).unwrap(), original);
+    }
 }

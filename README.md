@@ -40,6 +40,7 @@ versions (including kstring 2.0.2, compatible with that compiler).
 - `--profile strong`: 30 dB, with more risk of voice artifacts.
 - `--attenuation 9`: override the profile (1–60 dB).
 - `--start 60 --duration 30`: optional audio preview range.
+- `--report`: optionally write a JSON report beside the output (off by default).
 - `--work-dir /path`: choose scratch storage (default: OS temporary directory).
 
 Attenuation settings are model controls, not guaranteed measured noise reduction
@@ -88,7 +89,9 @@ for 80 minutes. Allow additional space for the final media. Output is staged in
 the destination directory and published by a no-clobber hard link; that directory
 must use a filesystem supporting hard links (e.g. APFS). Normal completion and
 error returns clean up staging files. Forced termination may leave temporary files.
-A JSON report is written beside output (`out.mp4.json`).
+By default, only the media file is exported. Add `--report` to write a JSON report
+beside the output (`out.mp4.json`). Without `--report`, existing reports are ignored
+and left untouched.
 
 This project vendors DeepFilterNet v0.5.6 under its original MIT/Apache-2.0 license
 and includes its pretrained model. See `vendor/deepfilter/UPSTREAM.md` and the

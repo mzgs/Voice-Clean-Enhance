@@ -70,6 +70,9 @@ struct Args {
     /// Temporary files directory (defaults to the OS temporary directory)
     #[arg(long)]
     work_dir: Option<PathBuf>,
+    /// Write a JSON report alongside the output (default: off)
+    #[arg(long)]
+    report: bool,
 }
 fn run(cmd: &mut Command) -> Result<()> {
     let result = cmd
@@ -134,7 +137,7 @@ fn main() -> Result<()> {
         "Use .wav output for time-range previews"
     );
     let report = args.output.with_extension(format!("{ext}.json"));
-    for path in [&args.output, &report] {
+    for path in std::iter::once(&args.output).chain(args.report.then_some(&report)) {
         ensure!(
             !path.try_exists()?,
             "Refusing to overwrite {}",
@@ -339,9 +342,11 @@ fn main() -> Result<()> {
     run(&mut encode)?;
     fs::hard_link(&staged, &args.output)
         .context("Could not publish output (an existing file is never replaced)")?;
-    let data = json!({"model":"DeepFilterNet3","engine":"DeepFilterNet Rust / Tract","input":args.input,"output":args.output,"attenuation_db":limit,"dereverb":args.dereverb.name(),"dereverb_method":if args.dereverb.amount() > 0.0 { Some("experimental-online-wpe") } else { None },"sample_rate":48000,"channels":channels,"frames":frames,"delay_compensated_samples":delay,"gain_db":20.0*gain.log10(),"elapsed_seconds":clock.elapsed().as_secs_f64(),"python_required":false});
-    let mut report_file = File::options().write(true).create_new(true).open(&report)?;
-    serde_json::to_writer_pretty(&mut report_file, &data)?;
+    if args.report {
+        let data = json!({"model":"DeepFilterNet3","engine":"DeepFilterNet Rust / Tract","input":args.input,"output":args.output,"attenuation_db":limit,"dereverb":args.dereverb.name(),"dereverb_method":if args.dereverb.amount() > 0.0 { Some("experimental-online-wpe") } else { None },"sample_rate":48000,"channels":channels,"frames":frames,"delay_compensated_samples":delay,"gain_db":20.0*gain.log10(),"elapsed_seconds":clock.elapsed().as_secs_f64(),"python_required":false});
+        let mut report_file = File::options().write(true).create_new(true).open(&report)?;
+        serde_json::to_writer_pretty(&mut report_file, &data)?;
+    }
     eprintln!("Saved {}", args.output.display());
     Ok(())
 }
