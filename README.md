@@ -12,8 +12,9 @@ download is required. FFmpeg and ffprobe must be available on PATH.
 ./clean-voice input.mp4 out.wav --start 60 --duration 30
 ```
 
-The launcher uses `target/release/clean-voice` (build first). For distribution,
-copy that compiled executable; it does not need this project directory or Cargo.
+Run `./build.sh` first to create the compiled `clean-voice` executable in the
+project root. For distribution, copy that executable; it does not need this
+project directory or Cargo.
 FFmpeg/ffprobe are separate dependencies.
 
 Supported output: MP4, MOV, MKV, or 24-bit 48 kHz WAV. Video is copied without
@@ -25,7 +26,7 @@ Existing output files and reports are never replaced; original media is never ed
 ## Build
 
 ```sh
-cargo build --release --locked
+./build.sh
 ```
 
 Tested with Rust 1.93.1 on Apple Silicon macOS. Keep Cargo.lock: it pins transitive
