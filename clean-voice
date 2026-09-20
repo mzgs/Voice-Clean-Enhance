@@ -1,8 +1,0 @@
-#!/bin/sh
-set -eu
-HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-if [ ! -x "$HERE/target/release/clean-voice" ]; then
-  echo 'Build first: cargo build --release --locked' >&2
-  exit 1
-fi
-exec "$HERE/target/release/clean-voice" "$@"
